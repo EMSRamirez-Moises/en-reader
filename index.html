@@ -5,10 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lector de Inglés Inteligente - ePub & AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Dependencia JSZip (Requerida por ePub.js) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <!-- ePub.js para leer libros electrónicos -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/epub.js/0.3.88/epub.min.js"></script>
+    <!-- JSZip y ePub.js se cargan en orden al abrir un libro, con CDN alternativo. -->
     <style>
         body { background-color: #0f172a; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; }
         .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid #334155; }
@@ -119,44 +116,105 @@
             alert('¡API Key guardada con éxito!');
         }
 
-        async function handleEpubUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            
-            document.getElementById('epubFileName').innerText = "📖 Cargando: " + file.name + "...";
-            
-            const reader = new FileReader();
-            reader.onload = async function(e) {
-                const arrayBuffer = e.target.result;
-                try {
-                    const book = ePub(arrayBuffer);
-                    await book.ready;
-                    
-                    let fullText = "";
-                    const spineItems = book.spine.items;
-                    
-                    for (let item of spineItems) {
-                        try {
-                            const section = await book.load(item.href);
-                            const parser = new DOMParser();
-                            const doc = parser.parseFromString(section.html || section, 'text/html');
-                            fullText += " " + doc.body.textContent;
-                        } catch (err) {
-                            console.log("Error cargando sección del epub:", err);
-                        }
-                    }
-                    
-                    if (!fullText.trim()) {
-                        throw new Error("No se pudo extraer texto del ePub.");
-                    }
-                    
-                    loadSentencesAndStart(fullText, 0);
-                } catch(err) {
-                    alert("Error leyendo el archivo ePub: " + err.message);
-                    document.getElementById('epubFileName').innerText = "Haz clic para seleccionar tu libro .epub";
+        let epubLibrariesPromise = null;
+
+        function loadLibrary(url, isReady) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                let settled = false;
+                const timer = setTimeout(() => finish(new Error('Tiempo agotado cargando ' + url)), 15000);
+                function finish(error) {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timer);
+                    script.onload = script.onerror = null;
+                    if (error) { script.remove(); reject(error); }
+                    else resolve();
                 }
-            };
-            reader.readAsArrayBuffer(file);
+                script.src = url;
+                script.onload = () => finish(isReady() ? null : new Error('La librería no se inicializó.'));
+                script.onerror = () => finish(new Error('No se pudo descargar ' + url));
+                document.head.appendChild(script);
+            });
+        }
+
+        async function loadLibraryWithFallback(urls, isReady) {
+            if (isReady()) return;
+            for (const url of urls) {
+                try { await loadLibrary(url, isReady); return; }
+                catch (error) { console.warn(error.message); }
+            }
+            throw new Error('No se pudieron cargar las librerías EPUB. Comprueba tu conexión o los bloqueos del navegador y vuelve a intentar.');
+        }
+
+        function ensureEpubLibraries() {
+            if (!epubLibrariesPromise) {
+                epubLibrariesPromise = (async () => {
+                    await loadLibraryWithFallback([
+                        'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
+                        'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
+                    ], () => typeof window.JSZip === 'function');
+                    await loadLibraryWithFallback([
+                        'https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js',
+                        'https://unpkg.com/epubjs@0.3.93/dist/epub.min.js'
+                    ], () => typeof window.ePub === 'function');
+                })().catch(error => { epubLibrariesPromise = null; throw error; });
+            }
+            return epubLibrariesPromise;
+        }
+
+        async function handleEpubUpload(event) {
+            const input = event.target;
+            const file = input.files[0];
+            if (!file) return;
+            const label = document.getElementById('epubFileName');
+            let book = null;
+            input.disabled = true;
+            try {
+                if (!/\.epub$/i.test(file.name)) throw new Error('Selecciona un archivo con extensión .epub.');
+                label.textContent = '📖 Cargando librerías...';
+                await ensureEpubLibraries();
+                label.textContent = '📖 Abriendo: ' + file.name;
+                book = window.ePub(await file.arrayBuffer());
+                await book.opened;
+                await book.ready;
+                const sections = book.spine.spineItems;
+                if (!sections || !sections.length) throw new Error('El libro no contiene capítulos para leer.');
+                const texts = [];
+                let failedSections = 0;
+                for (let i = 0; i < sections.length; i++) {
+                    const section = sections[i];
+                    label.textContent = '📖 Leyendo capítulo ' + (i + 1) + ' de ' + sections.length;
+                    try {
+                        // section.load devuelve un elemento DOM, no una cadena HTML.
+                        const contents = await section.load(book.load.bind(book));
+                        const doc = contents.ownerDocument;
+                        const body = doc.body || doc.getElementsByTagNameNS('*', 'body')[0] || contents;
+                        const clean = body.cloneNode(true);
+                        clean.querySelectorAll('script, style, noscript').forEach(node => node.remove());
+                        clean.querySelectorAll('br').forEach(node => node.replaceWith(doc.createTextNode('\n')));
+                        clean.querySelectorAll('p, div, h1, h2, h3, h4, li, blockquote').forEach(node => node.appendChild(doc.createTextNode('\n')));
+                        const text = (clean.textContent || '').replace(/\s+/g, ' ').trim();
+                        if (text) texts.push(text);
+                    } catch (error) {
+                        failedSections++;
+                        console.warn('No se pudo leer el capítulo:', section.href, error);
+                    } finally {
+                        section.unload();
+                    }
+                }
+                if (!texts.length) throw new Error('No se pudo extraer texto del EPUB. Puede estar dañado, protegido o contener solamente imágenes.');
+                loadSentencesAndStart(texts.join('\n\n'), 0);
+                if (failedSections) alert('Se cargó el libro, pero no se pudieron leer ' + failedSections + ' capítulos.');
+            } catch (error) {
+                console.error(error);
+                alert('Error leyendo el archivo EPUB: ' + error.message);
+            } finally {
+                if (book) book.destroy();
+                label.textContent = 'Haz clic para seleccionar tu libro .epub';
+                input.disabled = false;
+                input.value = '';
+            }
         }
 
         function startReadingFromText() {
@@ -166,13 +224,19 @@
         }
 
         function loadSentencesAndStart(text, startIndex) {
-            localStorage.setItem('saved_text', text);
+            try {
+                localStorage.setItem('saved_text', text);
+            } catch (error) {
+                localStorage.removeItem('saved_text');
+                localStorage.removeItem('saved_index');
+                alert('El texto es demasiado grande para guardar el progreso. Puedes seguir leyendo durante esta sesión.');
+            }
             
             sentences = text.match(/[^.!?]+[.!?]*/g) || [text];
             sentences = sentences.map(s => s.trim()).filter(s => s.length > 1);
             
             if(sentences.length > 0) {
-                currentIndex = startIndex < sentences.length ? startIndex : 0;
+                currentIndex = Number.isInteger(startIndex) && startIndex >= 0 && startIndex < sentences.length ? startIndex : 0;
                 document.getElementById('setupArea').classList.add('hidden');
                 document.getElementById('readingArea').classList.remove('hidden');
                 document.getElementById('readingArea').classList.add('flex');
@@ -266,17 +330,25 @@ Devuelve ÚNICAMENTE un JSON con un arreglo de objetos. No uses markdown. Format
         function renderAnalysis(chunks) {
             const container = document.getElementById('analysisResult');
             container.innerHTML = '';
+            if (!Array.isArray(chunks)) throw new Error('La IA devolvió un formato inesperado.');
             chunks.forEach(chunk => {
-                container.innerHTML += `
-                    <div class="glass-panel p-5 rounded-2xl border border-slate-600/50 hover:border-blue-500/80 transition transform hover:-translate-y-1 shadow-lg">
-                        <div class="text-xs font-bold uppercase tracking-wider text-blue-400 mb-3">${chunk.type}</div>
-                        <div class="text-2xl font-bold text-white mb-2 leading-tight">${chunk.en}</div>
-                        <div class="text-slate-400 font-serif mb-3 border-l-2 border-slate-600 pl-3">/${chunk.phonetic}/</div>
-                        <div class="text-emerald-400 font-medium">${chunk.es}</div>
-                    </div>
-                `;
+                const card = document.createElement('div');
+                card.className = 'glass-panel p-5 rounded-2xl border border-slate-600/50 hover:border-blue-500/80 transition shadow-lg';
+                const fields = [
+                    ['type', 'text-xs font-bold uppercase tracking-wider text-blue-400 mb-3'],
+                    ['en', 'text-2xl font-bold text-white mb-2 leading-tight'],
+                    ['phonetic', 'text-slate-400 font-serif mb-3 border-l-2 border-slate-600 pl-3'],
+                    ['es', 'text-emerald-400 font-medium']
+                ];
+                fields.forEach(([field, className]) => {
+                    const line = document.createElement('div');
+                    line.className = className;
+                    line.textContent = String(chunk[field] || '');
+                    card.appendChild(line);
+                });
+                container.appendChild(card);
             });
-            
+
             setTimeout(() => {
                 container.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }, 100);
