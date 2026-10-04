@@ -1,0 +1,20 @@
+<!doctype html><html><head><base target="_top"><meta charset="utf-8"></head><body>
+<script>
+'use strict';
+const channel = <?!= channelJson ?>;
+const readerOrigin = <?!= originJson ?>;
+const destination = window.top;
+function send(message){destination.postMessage(Object.assign({channel:channel},message),readerOrigin);}
+const hello=setInterval(function(){send({type:'reader-ready'});},1000);
+send({type:'reader-ready'});
+setTimeout(function(){clearInterval(hello);},45000);
+window.addEventListener('message',function(event){
+  if(event.origin!==readerOrigin || event.source!==destination || !event.data || event.data.channel!==channel)return;
+  const message=event.data;
+  if(message.type==='reader-connect'){clearInterval(hello);return;}
+  if(message.type!=='reader-request' || typeof message.id!=='string' || message.id.length>80)return;
+  google.script.run.withSuccessHandler(function(result){send({type:'reader-response',id:message.id,result:result});})
+    .withFailureHandler(function(){send({type:'reader-response',id:message.id,result:{ok:false,error:{code:'TRANSPORT',message:'No se pudo contactar con Apps Script.'}}});})
+    .rpc(message.request);
+});
+</script><p>Conexión privada del lector.</p></body></html>

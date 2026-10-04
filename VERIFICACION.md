@@ -27,3 +27,9 @@ Los cambios se preparan en una rama de revisión. La versión pública cambia de
 ## Actualización del lector y pronunciación local
 
 14 pruebas automatizadas pasan, incluidas pronunciación de oraciones sin solicitudes de IA, contracciones, palabras irregulares, aviso de entradas con variantes, conservación del texto y funcionamiento de las reglas cuando falla la conexión al diccionario. La prueba de interfaz comprueba la pronunciación local de un texto importado, la ayuda cerrada por defecto y apertura de los paneles de opciones y ayuda. La navegación inferior se fija mediante CSS con reserva de espacio y márgenes para la zona segura del móvil.
+
+## Backend opcional de Apps Script
+
+17 pruebas automatizadas pasan. Las nuevas pruebas ejecutan Code.gs, Drive.gs, Epub.gs y Progress.gs en un contexto local con Drive, Sheets, XmlService, Utilities y LockService simulados. Verifican autenticación, restricción de carpeta, EPUB en orden spine, omisión de scripts/navegación, límites, rechazo de cifrado y recursos ausentes, revisiones, ubicación válida, idempotencia del último guardado y conflicto entre dispositivos. El cliente de puente verifica origen, canal y ventana; se comprueba que la contraseña no aparece en la URL.
+
+No se creó ni desplegó un proyecto real de Apps Script. No se probó aún el iframe de HtmlService en una cuenta Google, permisos reales, cuotas ni archivos del usuario. La guía requiere esa comprobación antes de conectar la interfaz actual. Este módulo es un backend y adaptador preparados, no una sincronización activa.
