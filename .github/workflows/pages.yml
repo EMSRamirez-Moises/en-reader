@@ -25,10 +25,16 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build:css
+      - name: Preparar las mismas rutas que Pages desde main
+        run: |
+          mkdir -p .pages/public
+          cp -R public/. .pages/public/
+          cp index.html .pages/index.html
+          touch .pages/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: public
+          path: .pages
       - name: Desplegar interfaz
         id: deployment
         uses: actions/deploy-pages@v4

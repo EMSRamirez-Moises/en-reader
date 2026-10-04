@@ -18,7 +18,7 @@ Dentro de Ajustes selecciona el proveedor, escribe la contraseña del servidor y
 
 ## Tu repositorio y GitHub Pages
 
-Se ha preparado para el repositorio `en-reader` y rutas relativas: funcionará bajo `/en-reader/` sin cambiar el código. El proyecto se incorpora en una rama de revisión de ese mismo repositorio. El `index.html` raíz redirige a `public/` para conservar compatibilidad con Pages publicado desde una rama; el flujo de Actions publica directamente `public/`.
+Se ha preparado para el repositorio `en-reader` y rutas relativas: funcionará bajo `/en-reader/` sin cambiar el código. El proyecto se incorpora en una rama de revisión de ese mismo repositorio. El `index.html` raíz redirige a `public/` para conservar compatibilidad con Pages publicado desde una rama; el flujo de Actions publica las mismas rutas (`index.html` de entrada y `public/`) para que ambas modalidades de Pages sean compatibles.
 
 **El flujo automático publica la interfaz en Pages cuando haces push a main.** Si todavía no quieres desplegar, no incluyas `.github/workflows/pages.yml` hasta que estés listo. No se ha publicado ni modificado tu repositorio desde esta entrega.
 
