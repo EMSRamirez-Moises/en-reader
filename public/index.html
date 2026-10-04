@@ -24,25 +24,19 @@
       <p id="sync-state" class="library-footnote">Copia local activa. Conecta la sincronización privada en Ajustes para continuar en otro dispositivo.</p>
     </section>
     <section id="reader-view" class="reader-view" hidden>
-      <aside class="book-sidebar">
-        <button id="back-library" class="quiet">← Biblioteca</button><span class="eyebrow sidebar-label">AHORA ESTÁS LEYENDO</span><h2 id="book-title"></h2><p id="book-author" class="muted"></p>
-        <label class="field-label" for="chapters">Secciones del libro</label><select id="chapters" class="input"></select>
-        <div class="location"><span id="location-value"></span><progress id="book-progress" max="100" value="0" aria-label="Ubicación en el libro"></progress></div>
-        <div class="reading-options"><label class="toggle-label"><input type="checkbox" id="phonetics" checked> Pronunciación</label><label class="field-label" for="reading-mode">Modo de lectura</label><select id="reading-mode" class="input"><option value="assisted">Lectura acompañada</option><option value="continuous">Lectura continua</option></select><label class="field-label" for="font-size">Tamaño del texto</label><input type="range" id="font-size" min="18" max="30" value="24"><button id="bookmark" class="secondary">Guardar marcador</button></div>
-        <details class="bookmarks"><summary>Mis marcadores <span id="bookmark-count"></span></summary><div id="bookmark-list"></div></details>
-      </aside>
+      <header class="reader-toolbar"><button id="back-library" class="quiet">← Biblioteca</button><span id="reader-book-title" class="reader-book-title"></span><button id="reader-options" class="quiet">Opciones</button></header>
       <div class="reading-column">
-        <div class="reading-topline"><span id="chapter-title" class="eyebrow"></span><span id="provider-status" class="status-pill">Lectura local</span></div>
+        <div class="reading-topline"><span id="chapter-title" class="eyebrow"></span></div>
         <article class="reading-paper" aria-label="Pasaje del libro">
           <button id="previous-context" class="context-paragraph" lang="en" hidden></button>
           <div id="passage" class="passage" lang="en"></div>
           <div id="passage-note" class="muted text-sm"></div>
           <button id="next-context" class="context-paragraph" lang="en" hidden></button>
         </article>
-        <div class="reader-actions"><button id="analyze" class="primary">Acompañar este pasaje</button><span id="analysis-status" class="muted text-sm" aria-live="polite"></span></div>
-        <div class="page-controls"><button id="prev" class="secondary">← Anterior</button><span id="page-label" class="muted text-sm"></span><button id="next" class="secondary">Siguiente →</button></div>
-        <p class="reading-footnote">La pronunciación escrita es una guía aproximada del inglés estadounidense.</p>
+        <nav class="page-controls" aria-label="Navegar por la lectura"><button id="prev" class="secondary" aria-keyshortcuts="ArrowLeft">← Anterior</button><span id="page-label" class="muted text-sm"></span><button id="next" class="secondary" aria-keyshortcuts="ArrowRight">Siguiente →</button><button id="reader-help" class="quiet" aria-label="Abrir ayuda del pasaje">Ayuda</button></nav>
       </div>
+      <dialog id="help-dialog"><div class="dialog-heading"><h2>Ayuda del pasaje</h2><button data-close="help-dialog" class="quiet" aria-label="Cerrar ayuda">✕</button></div><span id="provider-status" class="status-pill">Lectura local</span>
+        <div class="reader-actions"><button id="analyze" class="primary">Acompañar este pasaje</button><span id="analysis-status" class="muted text-sm" aria-live="polite"></span></div>
       <aside id="help-panel" class="help-panel" aria-label="Ayuda de lectura" aria-live="polite">
         <span class="eyebrow">UNA AYUDA PARA SEGUIR</span><h2>Comprende el fragmento</h2><p id="selected-fragment" lang="en" class="selected-fragment">Selecciona un fragmento del pasaje.</p><p id="selected-phonetic" class="phonetic"></p>
         <div class="help-actions"><button id="hint-button" class="secondary" disabled>Dame una pista</button><button id="meaning-button" class="secondary" disabled>Ver significado</button></div>
@@ -50,8 +44,17 @@
         <details id="passage-meaning-box" hidden><summary>Sentido del pasaje completo</summary><p id="passage-meaning"></p></details>
         <p class="help-footer">La ayuda aparece cuando tú la necesitas. El libro marca el ritmo.</p>
       </aside>
+      </dialog>
     </section>
   </main>
+  <dialog id="reader-options-dialog"><div class="dialog-heading"><h2>Opciones de lectura</h2><button data-close="reader-options-dialog" class="quiet" aria-label="Cerrar opciones">✕</button></div><div class="book-sidebar">
+        <span class="eyebrow sidebar-label">AHORA ESTÁS LEYENDO</span><h2 id="book-title"></h2><p id="book-author" class="muted"></p>
+        <label class="field-label" for="chapters">Secciones del libro</label><select id="chapters" class="input"></select>
+        <div class="location"><span id="location-value"></span><progress id="book-progress" max="100" value="0" aria-label="Ubicación en el libro"></progress></div>
+        <div class="reading-options"><label class="toggle-label"><input type="checkbox" id="phonetics" checked> Pronunciación</label><label class="field-label" for="reading-mode">Modo de lectura</label><select id="reading-mode" class="input"><option value="assisted">Lectura acompañada</option><option value="continuous">Lectura continua</option></select><label class="field-label" for="font-size">Tamaño del texto</label><input type="range" id="font-size" min="18" max="30" value="24"><button id="bookmark" class="secondary">Guardar marcador</button></div>
+        <details class="bookmarks"><summary>Mis marcadores <span id="bookmark-count"></span></summary><div id="bookmark-list"></div></details>
+      </div>
+<p class="muted text-sm">La pronunciación se genera en tu navegador con un diccionario y reglas, sin consumo de IA. Es una aproximación: los sonidos del inglés no tienen equivalentes exactos en español.</p><details><summary>Acerca de la pronunciación</summary><p class="muted text-sm">Usamos CMUdict para el inglés estadounidense. Las iniciales se descargan al leer y se guardan si el navegador lo permite. Las palabras desconocidas usan reglas; las variantes por contexto pueden necesitar otra lectura. Toca una frase para consultar sus detalles.</p></details></dialog>
   <dialog id="import-dialog"><form id="import-form"><div class="dialog-heading"><h2>Añadir una lectura</h2><button type="button" data-close="import-dialog" class="quiet" aria-label="Cerrar">✕</button></div><p class="muted">Un libro que quieras leer, una historia o un artículo.</p><label class="upload-area" for="epub-file"><span>Abrir un EPUB o TXT</span><small>Hasta 30 MB · se procesa en tu dispositivo</small><input id="epub-file" type="file" accept=".epub,.txt"></label><p id="import-status" class="muted text-sm" aria-live="polite"></p><div class="divider">O pega un texto</div><label class="field-label" for="text-title">Título</label><input id="text-title" class="input" placeholder="Mi próxima lectura" maxlength="200"><label class="field-label" for="text-input">Texto en inglés</label><textarea id="text-input" class="input" rows="6" placeholder="Pega aquí el texto. Los párrafos separados por una línea vacía conservarán su estructura."></textarea><button id="import-text" class="primary w-full" type="submit">Empezar a leer</button></form></dialog>
   <dialog id="settings-dialog"><div class="dialog-heading"><h2>Tu experiencia</h2><button data-close="settings-dialog" class="quiet" aria-label="Cerrar">✕</button></div><form id="settings-form"><label for="provider" class="field-label">Ayuda de IA</label><select id="provider" class="input"><option value="gemini">Gemini</option><option value="openai">OpenAI</option></select><p id="connection-state" class="muted text-sm" aria-live="polite"></p><label for="api-base" class="field-label">Dirección del servidor de IA</label><input id="api-base" class="input" type="url" placeholder="Vacío: usar este mismo servidor"><p class="muted text-sm">Si usas GitHub Pages, indica aquí la dirección HTTPS de tu servidor. Las claves se configuran allí.</p><label for="server-password" class="field-label">Contraseña del servidor, si tiene una</label><input id="server-password" class="input" type="password" autocomplete="current-password" placeholder="Se usa solo para conectar esta sesión"><label class="toggle-label"><input id="sync-enabled" type="checkbox"> Sincronizar mis lecturas entre dispositivos</label><p class="muted text-sm">Se enviarán tus libros, avance y ayudas a tu servidor privado. Conecta los otros dispositivos al mismo servidor con tu contraseña.</p><label for="daily-goal" class="field-label">Meta diaria de lectura (minutos)</label><input id="daily-goal" class="input" type="number" min="1" max="120" value="10"><button type="submit" class="primary w-full">Guardar y conectar</button></form><div class="settings-divider"></div><h3>Una copia de tus lecturas</h3><p class="muted text-sm">Incluye libros, avance, marcadores y explicaciones. No contiene claves ni contraseñas.</p><div class="flex flex-wrap gap-2"><button id="export" class="secondary">Exportar copia</button><label class="secondary restore-label" for="restore">Restaurar copia<input id="restore" type="file" accept=".json" hidden></label></div><p class="muted text-sm settings-note">La API de OpenAI usa facturación independiente de ChatGPT. Esta versión conecta mediante API; no incluye inicio de sesión con el plan de ChatGPT.</p></dialog>
   <div id="toast" class="toast" role="status" hidden></div>

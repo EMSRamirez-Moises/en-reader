@@ -108,3 +108,11 @@ sync-store.mjs          Persistencia y combinación entre dispositivos
 ## Verificación
 
 Las pruebas usan pasajes, archivos EPUB creados para verificación y respuestas simuladas para revisar la extracción, la integridad de las explicaciones, el intercambio con ambos proveedores y la sincronización. No consumen crédito de IA. Consulta `VERIFICACION.md` para los resultados de esta entrega y sus límites.
+
+## Lectura sin distracciones y pronunciación sin IA
+
+El lector muestra una columna centrada y mantiene Anterior/Siguiente en una barra fija inferior, también en móvil. Las flechas del teclado permiten avanzar. Biblioteca y Opciones están en la cabecera; capítulos, tamaño, pronunciación y marcadores se consultan dentro de Opciones. La explicación de IA se abre con Ayuda o al tocar una frase y nunca ocupa una columna permanente.
+
+La pronunciación aparece bajo frases o cláusulas completas aunque no haya servidor de IA. Usa 125.923 entradas derivadas de CMUdict, convertidas a caracteres hispanos; las palabras ausentes se estiman con reglas. Las iniciales necesarias se descargan desde esta misma web y se guardan en Cache Storage cuando el navegador lo permite. No usa claves ni tokens ni envía el texto a un tercero. La primera carga del diccionario necesita internet; si falla, siguen funcionando las palabras comunes y reglas. Una vez guardadas, las iniciales pueden usarse sin conexión mientras la página siga abierta.
+
+Es una guía aproximada, no una transcripción fonética exacta. No todos los sonidos ingleses tienen equivalente en español. Tocar la frase permite ver las palabras estimadas y las entradas con variantes (la versión local usa la primera; no distingue automáticamente el sentido de `read`, por ejemplo). La IA sigue siendo opcional para explicaciones y traducción contextual. Fuente y licencia: `public/pronunciation/README.md` y `LICENSE`.

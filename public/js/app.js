@@ -2,6 +2,7 @@ import {getAll,get,put,removeBook,saveCache} from './storage.js';
 import {importEpub,textParagraphs} from './epub.js';
 import {demo,demoAnalysis} from './demo.js';
 import {validateAnalysis} from './analysis.js';
+import {preparePronunciation,localFragments} from './pronunciation.js';
 
 const $=id=>document.getElementById(id);
 const preferences={provider:'gemini',apiBase:'',sync:false,phonetics:true,mode:'assisted',fontSize:24,goal:10,theme:'light'};
@@ -12,6 +13,7 @@ let token=sessionStorage.getItem('reader-token')||'';
 let config=null,book=null,position=0,analysis=null,selected=0,request=null,version=0,lastActivity=Date.now(),syncing=false;
 let state={index:0,bookmarks:[]};
 let toastTimer;
+let localReading=[];
 const dateKey=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5500);}
 const safe=fn=>async(...args)=>{try{await fn(...args);}catch(error){notify(error.message||'No se pudo completar esta acción.');}};
@@ -48,37 +50,61 @@ async function renderLibrary(){
 async function savePosition(){if(!book)return;state={...state,id:'state:'+book.id,kind:'state',bookId:book.id,index:position,updatedAt:Date.now()};await put('meta',state);}
 async function openBook(id){
   cancelRequest();book=await get('books',id);if(!book)throw new Error('No se encontró esta lectura.');
-  state=await get('meta','state:'+id)||{index:0,bookmarks:[]};position=Math.min(state.index||0,book.paragraphs.length-1);$('library-view').hidden=true;$('reader-view').hidden=false;
+  state=await get('meta','state:'+id)||{index:0,bookmarks:[]};position=Math.min(state.index||0,book.paragraphs.length-1);$('library-view').hidden=true;$('reader-view').hidden=false;document.body.classList.add('reading');$('reader-book-title').textContent=book.title;
   $('book-title').textContent=book.title;$('book-author').textContent=book.author;$('chapters').replaceChildren();
   book.chapters.forEach((chapter,i)=>{const option=element('option','',chapter.title);option.value=i;$('chapters').append(option);});
   providerStatus();await renderPassage();renderBookmarks();lastActivity=Date.now();window.scrollTo({top:0,behavior:'instant'});
 }
 function cancelRequest(){version++;request?.abort();request=null;$('analyze').disabled=false;}
-async function move(index){if(!book)return;cancelRequest();position=Math.max(0,Math.min(index,book.paragraphs.length-1));await savePosition();await renderPassage();renderBookmarks();lastActivity=Date.now();}
+async function move(index){if(!book)return;cancelRequest();position=Math.max(0,Math.min(index,book.paragraphs.length-1));await savePosition();await renderPassage();renderBookmarks();lastActivity=Date.now();$('passage').scrollIntoView({block:'start',behavior:'instant'});}
 function cacheId(){return `${book.id}:${position}:${preferences.provider}:${config?.providers.find(p=>p.id===preferences.provider)?.model||'default'}`;}
 async function renderPassage(){
   const renderVersion=++version;analysis=null;const current=book.paragraphs[position];let cached=book.demo?null:await get('cache',cacheId());
   if(!book.demo&&!cached&&!config)cached=(await getAll('cache')).filter(item=>item.bookId===book.id&&item.index===position&&item.provider===preferences.provider).sort((a,b)=>b.savedAt-a.savedAt)[0];
   if(renderVersion!==version)return;
   if(book.demo)analysis=demoAnalysis[position];else if(cached){try{analysis=validateAnalysis(cached.analysis,current.text);}catch{analysis=null;}}
-  const passage=$('passage');passage.replaceChildren();passage.classList.toggle('analyzed',!!analysis&&preferences.mode==='assisted');
-  if(analysis&&preferences.mode==='assisted'){
-    analysis.fragments.forEach((fragment,i)=>{const button=element('button','chunk');button.type='button';button.append(element('span','chunk-en',fragment.en),element('span','chunk-phonetic',fragment.phonetic));button.lastChild.lang='es';button.addEventListener('click',()=>selectFragment(i));passage.append(button);});
-  }else passage.textContent=current.text;
+  const passage=$('passage');passage.replaceChildren();
+  const hasAssistance=!!analysis&&preferences.mode==='assisted';
+  passage.classList.add('analyzed');
+  if(!hasAssistance){
+    // Show the book immediately while dictionary shards load; never block navigation.
+    localReading=localFragments(current.text);
+    renderChunks(localReading,false);
+    preparePronunciation(current.text).then(()=>{if(renderVersion===version){localReading=localFragments(current.text);renderChunks(localReading,false);}});
+  }
+  renderChunks(hasAssistance?analysis.fragments:localReading,hasAssistance);
   const before=$('previous-context'),after=$('next-context');before.hidden=position===0;after.hidden=position===book.paragraphs.length-1;
   if(position>0)before.textContent=book.paragraphs[position-1].text;
   if(position<book.paragraphs.length-1)after.textContent=book.paragraphs[position+1].text;
   const chapter=current.chapter;$('chapter-title').textContent=book.chapters[chapter]?.title||'Lectura';$('chapters').value=chapter;
   $('location-value').textContent=`Ubicación ${position+1} de ${book.paragraphs.length}`;$('book-progress').value=(position+1)/book.paragraphs.length*100;
   $('page-label').textContent=`${position+1} / ${book.paragraphs.length}`;$('prev').disabled=position===0;$('next').disabled=position===book.paragraphs.length-1;
-  $('passage-note').textContent=analysis?'':'La ayuda y la pronunciación aparecerán al acompañar este pasaje.';
+  $('passage-note').textContent='';
   $('analysis-status').textContent=book.demo?'Ayuda de muestra · sin consumo de IA':cached?'Explicación guardada · sin nueva solicitud':'';
   $('analyze').textContent=analysis?'Volver a explicar con IA':'Acompañar este pasaje';$('analyze').disabled=book.demo;
   $('bookmark').textContent=state.bookmarks.includes(position)?'Quitar marcador':'Guardar marcador';
   $('passage-meaning-box').hidden=!analysis;$('passage-meaning-box').open=false;$('passage-meaning').textContent=analysis?.meaning||'';
   if(analysis)selectFragment(0);else clearHelp();
 }
-function clearHelp(){$('selected-fragment').textContent='Selecciona un fragmento después de acompañar el pasaje.';$('selected-phonetic').textContent='';$('hint-button').disabled=true;$('meaning-button').disabled=true;['fragment-hint','fragment-meaning','fragment-note'].forEach(id=>$(id).hidden=true);}
+function renderChunks(fragments,assisted){
+  const passage=$('passage');passage.replaceChildren();
+  fragments.forEach((fragment,i)=>{
+    const button=element('button','chunk');button.type='button';
+    button.append(element('span','chunk-en',fragment.en),element('span','chunk-phonetic',assisted?fragment.phonetic:fragment.text));button.lastChild.lang='es';
+    button.setAttribute('aria-label',fragment.en+' · ver ayuda');
+    button.addEventListener('click',()=>{
+      if(assisted)selectFragment(i);else{
+        clearHelp();$('selected-fragment').textContent=fragment.en;$('selected-phonetic').textContent=fragment.text;
+        const details=['Guía local aproximada · sin IA.'];
+        if(fragment.uncertain.length)details.push('Estimadas por reglas: '+fragment.uncertain.join(', ')+'.');
+        if(fragment.ambiguous.length)details.push('Con variantes; se usa la primera del diccionario: '+fragment.ambiguous.join(', ')+'.');
+        $('fragment-note').textContent=details.join(' ');$('fragment-note').hidden=false;
+      }
+      $('help-dialog').showModal();
+    });passage.append(button);
+  });
+}
+function clearHelp(){$('selected-fragment').textContent='La pronunciación local ya está bajo cada frase. La IA es opcional para explicar el sentido.';$('selected-phonetic').textContent='';$('hint-button').disabled=true;$('meaning-button').disabled=true;['fragment-hint','fragment-meaning','fragment-note'].forEach(id=>$(id).hidden=true);}
 function selectFragment(index){
   if(!analysis)return;selected=index;const fragment=analysis.fragments[index];$('passage').querySelectorAll('.chunk').forEach((b,i)=>b.setAttribute('aria-pressed',String(i===index)));
   $('selected-fragment').textContent=fragment.en;$('selected-phonetic').textContent=fragment.phonetic;$('fragment-hint').textContent=fragment.hint;$('fragment-meaning').textContent=fragment.es;$('fragment-note').textContent=fragment.note;
@@ -161,7 +187,7 @@ async function configure(event){
 }
 async function exportCopy(){const data=await snapshot();const blob=new Blob([JSON.stringify(data)],{type:'application/json'});const url=URL.createObjectURL(blob);const link=element('a');link.href=url;link.download='entre-lineas-'+dateKey()+'.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 async function restoreCopy(file){if(!file)return;if(file.size>30*1024*1024)throw new Error('La copia supera 30 MB.');const data=checkSnapshot(JSON.parse(await file.text()));if(!confirm('¿Añadir los libros de esta copia y recuperar sus avances más recientes?'))return;await mergeSnapshot(data);await renderLibrary();await synchronize();notify('Lecturas recuperadas.');}
-async function showLibrary(){cancelRequest();book=null;$('reader-view').hidden=true;$('library-view').hidden=false;await synchronize();await renderLibrary();}
+async function showLibrary(){cancelRequest();book=null;$('reader-view').hidden=true;document.body.classList.remove('reading');$('library-view').hidden=false;await synchronize();await renderLibrary();}
 async function migrateLegacy(){
   const original=localStorage.getItem('saved_text');const id='legacy-reading-v1';
   if(!original||await get('books',id)||await get('meta','deleted:'+id))return;
@@ -185,16 +211,18 @@ async function init(){
   $('import-form').addEventListener('submit',safe(async event=>{event.preventDefault();const text=$('text-input').value;if(text.length>20*1024*1024)throw new Error('El texto supera 20 MB.');const paragraphs=textParagraphs(text);if(!paragraphs.length)throw new Error('Pega un texto en inglés para empezar.');await addBook({title:$('text-title').value.trim()||'Mi lectura',author:'Texto personal',paragraphs,chapters:[{title:'Lectura',start:0}]});$('text-input').value='';$('text-title').value='';}));
   $('prev').addEventListener('click',safe(()=>move(position-1)));$('next').addEventListener('click',safe(()=>move(position+1)));
   $('previous-context').addEventListener('click',safe(()=>move(position-1)));$('next-context').addEventListener('click',safe(()=>move(position+1)));
-  $('chapters').addEventListener('change',safe(event=>move(book.chapters[Number(event.target.value)].start)));
+  $('chapters').addEventListener('change',safe(async event=>{await move(book.chapters[Number(event.target.value)].start);$('reader-options-dialog').close();}));
   $('phonetics').addEventListener('change',event=>{preferences.phonetics=event.target.checked;savePreferences();});
   $('reading-mode').addEventListener('change',safe(async event=>{preferences.mode=event.target.value;savePreferences();await renderPassage();}));
   $('font-size').addEventListener('input',event=>{preferences.fontSize=Number(event.target.value);savePreferences();});
   $('bookmark').addEventListener('click',safe(async()=>{if(state.bookmarks.includes(position))state.bookmarks=state.bookmarks.filter(i=>i!==position);else state.bookmarks.push(position);await savePosition();renderBookmarks();$('bookmark').textContent=state.bookmarks.includes(position)?'Quitar marcador':'Guardar marcador';}));
+  $('reader-options').addEventListener('click',()=>$('reader-options-dialog').showModal());
+  $('reader-help').addEventListener('click',()=>$('help-dialog').showModal());
   $('analyze').addEventListener('click',safe(analyzePassage));
   $('hint-button').addEventListener('click',()=>$('fragment-hint').hidden=!$('fragment-hint').hidden);
   $('meaning-button').addEventListener('click',()=>{const hidden=!$('fragment-meaning').hidden;$('fragment-meaning').hidden=hidden;$('fragment-note').hidden=hidden;});
   $('settings-form').addEventListener('submit',safe(configure));$('export').addEventListener('click',safe(exportCopy));$('restore').addEventListener('change',safe(async event=>{try{await restoreCopy(event.target.files[0]);}finally{event.target.value='';}}));
-  document.addEventListener('keydown',safe(async event=>{if(!book||document.querySelector('dialog[open]')||['INPUT','TEXTAREA','SELECT','BUTTON','SUMMARY'].includes(document.activeElement.tagName))return;if(event.key==='ArrowRight')await move(position+1);if(event.key==='ArrowLeft')await move(position-1);}));
+  document.addEventListener('keydown',safe(async event=>{if(!book||document.querySelector('dialog[open]')||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName))return;if(event.key==='ArrowRight'){event.preventDefault();await move(position+1);}if(event.key==='ArrowLeft'){event.preventDefault();await move(position-1);}}));
   ['pointerdown','keydown','scroll'].forEach(type=>document.addEventListener(type,()=>{lastActivity=Date.now();},{passive:true}));
   setInterval(safe(async()=>{if(book&&!document.hidden&&Date.now()-lastActivity<90000){const id=`stats:${device}:${dateKey()}`;const entry=await get('meta',id)||{id,kind:'stats',date:dateKey(),device,seconds:0};entry.seconds=Math.min(86400,entry.seconds+15);await put('meta',entry);}await dailyHabit();}),15000);
   setInterval(()=>{if(!document.hidden)synchronize();},30000);
