@@ -49,11 +49,11 @@ function config_() {
   const origin = p.getProperty('ALLOWED_ORIGIN');
   if (!/^https:\/\/[a-zA-Z0-9.-]+(?::\d+)?$/.test(origin || '')) fail_('CONFIG', 'Falta ALLOWED_ORIGIN (solo el origen HTTPS, sin ruta).');
   const folderId = p.getProperty('DRIVE_FOLDER_ID'), sheetId = p.getProperty('SHEET_ID');
-  if (!folderId || !sheetId || !p.getProperty('TOKEN_SECRET') || !p.getProperty('PASSWORD_HASH')) fail_('CONFIG', 'Ejecuta setup_ desde el editor antes de desplegar.');
+  if (!folderId || !sheetId || !p.getProperty('TOKEN_SECRET') || !p.getProperty('PASSWORD_HASH')) fail_('CONFIG', 'Completa la configuración inicial indicada en README antes de desplegar.');
   return {origin:origin, folderId:folderId, sheetId:sheetId};
 }
 
-/** Run ONCE manually in the Apps Script editor after setting the four properties in README. */
+/** Private initializer. Run via the TEMPORARY wrapper in README; remove the wrapper before deployment. */
 function setup_() {
   const p = PropertiesService.getScriptProperties();
   const password = p.getProperty('APP_PASSWORD');

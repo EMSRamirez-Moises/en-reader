@@ -28,7 +28,18 @@ Este módulo guarda los EPUB originales en **tu carpeta privada de Drive**, extr
    | `ALLOWED_ORIGIN` | `https://emsramirez-moises.github.io` — sin `/en-reader/` ni barra final |
    | `APP_PASSWORD` | Contraseña aleatoria de al menos 20 caracteres; nunca en GitHub |
 
-5. Selecciona y ejecuta **setup_** manualmente desde el editor. Autoriza los servicios con tu cuenta. La función crea las pestañas Books y Progress, genera el secreto de sesión y sustituye APP_PASSWORD por su hash. Guarda la contraseña en tu gestor de contraseñas. Volver a ejecutar setup_ con una nueva APP_PASSWORD revoca todas las sesiones anteriores.
+5. `setup_` termina en guion bajo para mantenerla privada, por eso **no aparece en el selector Ejecutar del editor**. Para realizar la configuración inicial, añade temporalmente al final de `Code.gs`, fuera de cualquier otra función:
+
+   ```js
+   function iniciarConfiguracion() {
+     setup_();
+   }
+   ```
+
+   Guarda. En el selector junto a Ejecutar elige **iniciarConfiguracion** y pulsa Ejecutar. Autoriza los servicios con tu cuenta. Al finalizar, comprueba que la hoja contiene las pestañas Books y Progress. `APP_PASSWORD` se sustituye por `PASSWORD_HASH` y `TOKEN_SECRET`; conserva la contraseña original en tu gestor de contraseñas.
+
+   **Borra después únicamente la función temporal `iniciarConfiguracion` y guarda antes de desplegar.** Conserva `setup_` y su guion bajo. La función temporal sin guion bajo sería invocable desde HtmlService si se incluyera en el despliegue; no debe publicarse. Para cambiar la contraseña, vuelve a añadir APP_PASSWORD en las propiedades, repite este procedimiento y elimina de nuevo la función temporal. Esto revoca las sesiones anteriores.
+
 6. Implementar → Nueva implementación → Aplicación web. Ejecutar como **tú**; acceso **Cualquier persona**, si tu cuenta permite esta modalidad. La URL del endpoint es pública, pero las operaciones de datos exigen tu contraseña/sesión. Si necesitas un endpoint restringido por identidad Google, esta modalidad de contraseña no sustituye ese requisito: usa un despliegue y flujo de OAuth distinto. No compartas tu contraseña ni la URL con parámetros sensibles.
 7. Guarda la URL que termina en `/exec`. No uses `/dev`. Cuando cambies el código de Apps Script, edita la implementación y selecciona una **nueva versión** conservando la URL.
 8. Conecta el cliente como indica el ejemplo y prueba primero un EPUB pequeño en dos navegadores. Comprueba login incorrecto, lectura sin token, recuperación, marcador y conflicto. Si tu organización bloquea aplicaciones públicas o iframes, no retires sus protecciones: este transporte no será compatible con esa cuenta.
