@@ -2,7 +2,7 @@
 
 Este módulo guarda los EPUB originales en **tu carpeta privada de Drive**, extrae el texto con Apps Script y conserva el progreso en **tu hoja privada de Sheets**. Usa servicios con cuotas gratuitas; no significa capacidad ilimitada. No conecta con Gemini/OpenAI ni envía texto a modelos.
 
-**Estado:** código listo para desplegar y adaptador de navegador incluido. No está desplegado en tu cuenta ni conectado a los Ajustes del lector actual. No hay una URL /exec real configurada. Las pruebas locales sustituyen los servicios de Google; la autorización, iframe y cuotas deben comprobarse en el despliegue real antes de activar la sincronización pública.
+**Estado:** conexión integrada en los Ajustes del lector. El endpoint `/exec` del propietario está preconfigurado en `public/js/drive-connection.js`; la contraseña se introduce en la interfaz. Las pruebas automatizadas usan servicios de Google simulados. La lectura y el guardado autenticados con los archivos reales deben comprobarse en la implementación del propietario.
 
 ## Archivos
 
@@ -102,7 +102,7 @@ if (response.conflict) {
 }
 ```
 
-El lector actual usa `/api/sync` para el servidor Node. Este backend tiene un contrato distinto: **no basta con pegar su URL en “Dirección del servidor de IA”**. Se debe añadir un modo de sincronización Drive que use este adaptador. Guardar con debounce (p. ej. tras 5 segundos de inactividad), al cambiar de libro y al volver la conexión; serializar las escrituras. Mantener la copia local si falla Google y consultar el estado remoto antes de reintentar. No depender de que un guardado al cerrar la pestaña termine.
+El lector ya usa este transporte en **Ajustes → Continuar en otro dispositivo**. `drive-connection.js` gestiona sesión, biblioteca y mensajes; `drive-library.js` conserva operaciones pendientes, versiones y conflictos por libro. Guarda tras una pausa de 1,5 segundos y vuelve a intentar cada 30 segundos, al salir a Biblioteca y al recuperar conexión. No depende de un guardado al cerrar la pestaña. El servidor Node conserva su modo `/api/sync` separado; la URL `/exec` no va en el campo del servidor de IA.
 
 Para herramientas de servidor/CLI, `doPost` acepta el mismo JSON y ContentService devuelve el sobre. El cliente debe seguir redirecciones **sin reenviar la contraseña a destinos ajenos a Google**. Todas las respuestas de aplicación tienen `{ok}`; no se promete un código HTTP distinto para cada error.
 

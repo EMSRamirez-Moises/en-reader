@@ -1,35 +1,21 @@
 # Verificación de la entrega
 
-`npm test`: 11 pruebas automatizadas aprobadas. `npm run build:css`: compilación aprobada con Tailwind 4.1.14. Revisiones de sintaxis de los módulos y servidor aprobadas.
+`npm test`: 21 pruebas aprobadas. `npm run build:css`: compilación aprobada con Tailwind 4.1.14.
 
 ## Cobertura
 
-- Respuestas IA completas, conservación del original y rechazo de palabras modificadas u omitidas.
-- División de textos largos sin pérdida de palabras.
-- EPUB de prueba: container, OPF, metadata, spine, capítulos, párrafos y exclusión de scripts.
-- EPUB inválido y límites de tamaño.
-- Dos dispositivos simulados: modificaciones concurrentes, eliminación persistente y minutos sin duplicar reintentos.
-- Copias corruptas rechazadas antes de escribir.
-- Adaptadores Gemini y OpenAI con respuestas simuladas, claves en servidor y errores de cuota.
-- Servidor HTTP real local: interfaz, autenticación, sincronización, bloqueo de origen externo y protección de `.env`.
-- Interfaz en DOM simulado: muestra, pronunciación, significado, ocultación de ayudas, navegación, marcadores, continuidad al reabrir, texto pegado y reutilización de explicación guardada sin nueva llamada.
+- EPUB por orden spine, capítulos, conservación del texto, exclusión de scripts y errores de archivos inválidos.
+- Pronunciación de frases sin IA, contracciones, variantes y reglas cuando falla el diccionario.
+- Respuestas Gemini y OpenAI simuladas, conservación del original, caché y errores de proveedor.
+- Servidor HTTP local: autenticación, sincronización, bloqueo de origen y protección de archivos de configuración.
+- Apps Script con Drive, Sheets y servicios simulados: autenticación, límites, carpeta privada, revisiones, idempotencia y conflictos.
+- Puente iframe: origen, canal y ventana verificados; contraseña fuera de la URL.
+- Dos dispositivos Drive simulados: recuperación de avance y marcadores, conflictos con elección explícita, respuesta perdida sin duplicar escritura y edición local durante un guardado pendiente.
+- EPUB reemplazado: ubicación anterior no se aplica al texto nuevo.
+- Interfaz Happy DOM: lectura, navegación, marcadores, importación, pronunciación y explicación guardada; conexión Drive mediante mensajes simulados, tarjeta remota, apertura, guardado y cierre de sesión.
 
 ## Límites
 
-No se realizaron llamadas pagadas a Gemini u OpenAI; no se proporcionaron claves. La conexión real debe comprobarse después de configurar las claves y modelos en el servidor.
+No se realizaron llamadas pagadas a Gemini u OpenAI. No se probaron los libros personales ni un inicio de sesión real en la biblioteca privada: la contraseña se introduce directamente en la web por su propietario. Las pruebas de dos dispositivos son simuladas, no dos teléfonos físicos. Los cambios de interfaz se publican desde main; Apps Script se actualiza por separado en su editor.
 
-La prueba de interfaz usa Happy DOM, no un navegador gráfico real. El diseño incluye reglas responsivas para móvil y escritorio, pero no se obtuvo verificación visual con capturas. No se probó con el EPUB personal del usuario ni con libros de todos los editores.
-
-La sincronización se probó con dos estados contra el mismo almacenamiento, no con dos teléfonos reales. Para usarla fuera de localhost se necesita desplegar el servidor con HTTPS, contraseña y disco persistente. GitHub Pages no proporciona ese servidor.
-
-Los cambios se preparan en una rama de revisión. La versión pública cambia después de incorporar los cambios a `main` y configurar Pages según README.
-
-## Actualización del lector y pronunciación local
-
-14 pruebas automatizadas pasan, incluidas pronunciación de oraciones sin solicitudes de IA, contracciones, palabras irregulares, aviso de entradas con variantes, conservación del texto y funcionamiento de las reglas cuando falla la conexión al diccionario. La prueba de interfaz comprueba la pronunciación local de un texto importado, la ayuda cerrada por defecto y apertura de los paneles de opciones y ayuda. La navegación inferior se fija mediante CSS con reserva de espacio y márgenes para la zona segura del móvil.
-
-## Backend opcional de Apps Script
-
-17 pruebas automatizadas pasan. Las nuevas pruebas ejecutan Code.gs, Drive.gs, Epub.gs y Progress.gs en un contexto local con Drive, Sheets, XmlService, Utilities y LockService simulados. Verifican autenticación, restricción de carpeta, EPUB en orden spine, omisión de scripts/navegación, límites, rechazo de cifrado y recursos ausentes, revisiones, ubicación válida, idempotencia del último guardado y conflicto entre dispositivos. El cliente de puente verifica origen, canal y ventana; se comprueba que la contraseña no aparece en la URL.
-
-No se creó ni desplegó un proyecto real de Apps Script. No se probó aún el iframe de HtmlService en una cuenta Google, permisos reales, cuotas ni archivos del usuario. La guía requiere esa comprobación antes de conectar la interfaz actual. Este módulo es un backend y adaptador preparados, no una sincronización activa.
+La opción Drive sincroniza originales EPUB y avance/marcadores. Los libros importados directamente en el navegador, las ayudas de IA y las estadísticas diarias siguen siendo locales. Las cuotas y permisos de la cuenta de Google siguen aplicando.

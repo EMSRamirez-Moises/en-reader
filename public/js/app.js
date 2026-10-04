@@ -3,6 +3,7 @@ import {importEpub,textParagraphs} from './epub.js';
 import {demo,demoAnalysis} from './demo.js';
 import {validateAnalysis} from './analysis.js';
 import {preparePronunciation,localFragments} from './pronunciation.js';
+import {connectDriveUI} from './drive-connection.js';
 
 const $=id=>document.getElementById(id);
 const preferences={provider:'gemini',apiBase:'',sync:false,phonetics:true,mode:'assisted',fontSize:24,goal:10,theme:'light'};
@@ -14,6 +15,7 @@ let config=null,book=null,position=0,analysis=null,selected=0,request=null,versi
 let state={index:0,bookmarks:[]};
 let toastTimer;
 let localReading=[];
+let drive;
 const dateKey=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5500);}
 const safe=fn=>async(...args)=>{try{await fn(...args);}catch(error){notify(error.message||'No se pudo completar esta acción.');}};
@@ -34,22 +36,25 @@ async function loadConfig(){
 function providerStatus(){const p=config?.providers.find(p=>p.id===preferences.provider);$('provider-status').textContent=book?.demo?'Muestra preparada':p?.enabled?`${preferences.provider==='gemini'?'Gemini':'OpenAI'} · ${p.model}`:'Lectura local · configura IA';}
 async function dailyHabit(){const entries=await getAll('meta');const seconds=entries.filter(x=>x.kind==='stats'&&x.date===dateKey()).reduce((sum,x)=>sum+x.seconds,0);$('habit-value').textContent=`${Math.floor(seconds/60)} / ${preferences.goal} min`;}
 async function renderLibrary(){
-  const books=await getAll('books');const states=await getAll('meta');const stateMap=new Map(states.filter(x=>x.kind==='state').map(x=>[x.bookId,x]));
+  const books=await getAll('books');for(const remote of drive?.books||[])if(!books.some(b=>b.id===remote.id))books.push({...remote,source:'drive',author:'Google Drive',createdAt:0});const states=await getAll('meta');const stateMap=new Map(states.filter(x=>x.kind==='state').map(x=>[x.bookId,x]));
   books.sort((a,b)=>(stateMap.get(b.id)?.updatedAt||b.createdAt)-(stateMap.get(a.id)?.updatedAt||a.createdAt));
   const list=$('book-list');list.replaceChildren();$('library-empty').hidden=books.length>0;
   for(const item of books){
-    const saved=stateMap.get(item.id);const at=Math.min(saved?.index||0,item.paragraphs.length-1);
+    const saved=stateMap.get(item.id);const at=Math.min(saved?.index||0,(item.paragraphs?.length||1)-1);
     const card=element('article','book-card');const cover=element('div','book-cover');
-    cover.append(element('span','eyebrow',item.demo?'RELATO DE MUESTRA':'LECTURA PERSONAL'),element('h3','',item.title));
+    cover.append(element('span','eyebrow',item.source==='drive'?'GOOGLE DRIVE':item.demo?'RELATO DE MUESTRA':'LECTURA PERSONAL'),element('h3','',item.title));
     const del=element('button','quiet book-delete','Eliminar');del.setAttribute('aria-label','Eliminar '+item.title);del.addEventListener('click',safe(async()=>{if(!confirm(`¿Eliminar “${item.title}” y sus ayudas guardadas?`))return;await removeBook(item.id);await put('meta',{id:'deleted:'+item.id,kind:'deleted',bookId:item.id,updatedAt:Date.now()});await renderLibrary();await synchronize();}));
-    const info=element('div','book-info');info.append(element('p','muted',item.author));const progress=element('p','muted',`Ubicación ${at+1} de ${item.paragraphs.length} pasajes${saved?' · avance guardado':''}`);
+    if(item.source==='drive')del.hidden=true;
+    const info=element('div','book-info');info.append(element('p','muted',item.author));const progress=element('p','muted',item.paragraphs?`Ubicación ${at+1} de ${item.paragraphs.length} pasajes${saved?' · avance guardado':''}`:'EPUB privado · se descarga al abrir');
     const open=element('button','secondary',saved?'Continuar leyendo':'Abrir lectura');open.addEventListener('click',safe(()=>openBook(item.id)));info.append(progress,open);card.append(cover,del,info);list.append(card);
   }
   await dailyHabit();
 }
-async function savePosition(){if(!book)return;state={...state,id:'state:'+book.id,kind:'state',bookId:book.id,index:position,updatedAt:Date.now()};await put('meta',state);}
+async function savePosition(){if(!book)return;state={...state,id:'state:'+book.id,kind:'state',bookId:book.id,index:position,updatedAt:Date.now()};if(book.source==='drive')await drive.mark(book,state);else await put('meta',state);}
 async function openBook(id){
-  cancelRequest();book=await get('books',id);if(!book)throw new Error('No se encontró esta lectura.');
+  cancelRequest();let value=await get('books',id);
+  if(id.startsWith('drive:')&&drive?.connected){try{value=await drive.open(id.slice(6));}catch(error){if(!value)throw error;notify('Se abrió tu copia local. '+error.message);}}
+  if(!value){openSettings();throw new Error('Conecta Google Drive en Ajustes para abrir esta lectura.');}book=value;
   state=await get('meta','state:'+id)||{index:0,bookmarks:[]};position=Math.min(state.index||0,book.paragraphs.length-1);$('library-view').hidden=true;$('reader-view').hidden=false;document.body.classList.add('reading');$('reader-book-title').textContent=book.title;
   $('book-title').textContent=book.title;$('book-author').textContent=book.author;$('chapters').replaceChildren();
   book.chapters.forEach((chapter,i)=>{const option=element('option','',chapter.title);option.value=i;$('chapters').append(option);});
@@ -160,6 +165,7 @@ async function mergeSnapshot(input){
 }
 let lastSyncFingerprint='';
 async function synchronize(){
+  if(drive?.connected)return;
   if(!preferences.sync){$('sync-state').textContent='Copia local activa. Conecta la sincronización privada en Ajustes para continuar en otro dispositivo.';return;}
   if(!config?.syncEnabled||!token){$('sync-state').textContent='Copia local activa · conecta tu sesión para sincronizar.';return;}
   if(syncing)return;syncing=true;
@@ -187,7 +193,7 @@ async function configure(event){
 }
 async function exportCopy(){const data=await snapshot();const blob=new Blob([JSON.stringify(data)],{type:'application/json'});const url=URL.createObjectURL(blob);const link=element('a');link.href=url;link.download='entre-lineas-'+dateKey()+'.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 async function restoreCopy(file){if(!file)return;if(file.size>30*1024*1024)throw new Error('La copia supera 30 MB.');const data=checkSnapshot(JSON.parse(await file.text()));if(!confirm('¿Añadir los libros de esta copia y recuperar sus avances más recientes?'))return;await mergeSnapshot(data);await renderLibrary();await synchronize();notify('Lecturas recuperadas.');}
-async function showLibrary(){cancelRequest();book=null;$('reader-view').hidden=true;document.body.classList.remove('reading');$('library-view').hidden=false;await synchronize();await renderLibrary();}
+async function showLibrary(){drive?.flush();cancelRequest();book=null;$('reader-view').hidden=true;document.body.classList.remove('reading');$('library-view').hidden=false;await synchronize();await renderLibrary();}
 async function migrateLegacy(){
   const original=localStorage.getItem('saved_text');const id='legacy-reading-v1';
   if(!original||await get('books',id)||await get('meta','deleted:'+id))return;
@@ -202,6 +208,7 @@ async function migrateLegacy(){
 }
 async function init(){
   applyPreferences();await migrateLegacy();await renderLibrary();await loadConfig();await synchronize();
+  drive=connectDriveUI({device,preferences,savePreferences,renderLibrary,notify,onResolved:async id=>{if(book?.id===id){state=await get('meta','state:'+id);position=state.index;await renderPassage();renderBookmarks();}}});
   $('home').addEventListener('click',safe(showLibrary));$('back-library').addEventListener('click',safe(showLibrary));
   $('import-button').addEventListener('click',()=>$('import-dialog').showModal());$('settings-button').addEventListener('click',openSettings);
   document.querySelectorAll('[data-close]').forEach(button=>button.addEventListener('click',()=>$(button.dataset.close).close()));

@@ -24,7 +24,7 @@ Se ha preparado para el repositorio `en-reader` y rutas relativas: funcionará b
 
 En GitHub abre Settings → Pages → Source → GitHub Actions. La tarea incluida verifica las pruebas, recompila Tailwind y publica únicamente `public/`. También puedes alojar manualmente el contenido de `public/` como una web estática. Conserva las carpetas `js/` y `vendor/` junto a `index.html`.
 
-**Pages solo ejecuta la interfaz.** La IA y la sincronización necesitan el servidor Node incluido. Despliégalo en un alojamiento con HTTPS y disco persistente. Puedes usar el Dockerfile, con `/data` conectado a un volumen persistente, o iniciar `node server.mjs` con las variables de entorno configuradas por tu proveedor.
+**Pages solo ejecuta la interfaz.** La IA necesita el servidor Node incluido. Para sincronizar EPUB y avance puedes conectar Google Drive / Apps Script en Ajustes, sin servidor Node. Para usar la sincronización completa con Node, Despliégalo en un alojamiento con HTTPS y disco persistente. Puedes usar el Dockerfile, con `/data` conectado a un volumen persistente, o iniciar `node server.mjs` con las variables de entorno configuradas por tu proveedor.
 
 En ese servidor configura:
 
@@ -119,4 +119,13 @@ Es una guía aproximada, no una transcripción fonética exacta. No todos los so
 
 ## Alternativa personal con Google Drive y Apps Script
 
-Se incluye un backend opcional para conservar hasta tres EPUB originales en una carpeta privada de Drive y ubicación/marcadores en Sheets. El código, la API y el despliegue están en [apps-script/README.md](apps-script/README.md). `public/js/drive-api.js` incluye el puente de navegador para conectarlo desde GitHub Pages. Esta alternativa requiere crear y autorizar tu implementación de Apps Script; todavía no está conectada a los Ajustes del lector ni tiene un endpoint real configurado. No pegues su URL en el campo del servidor Node/IA, pues el contrato es diferente.
+El lector incluye conexión a Google Drive en **Ajustes → Continuar en otro dispositivo**. La URL `/exec` proporcionada por el propietario está preconfigurada; se puede cambiar en “Dirección de la Web App”. Introduce la contraseña directamente en el lector y pulsa **Conectar Google Drive**. No la guardamos en el código ni en localStorage. El token queda en sessionStorage, durante un máximo de 12 horas; otro dispositivo debe conectar su propia sesión.
+
+1. Coloca hasta tres EPUB originales (máximo 5 MB cada uno) directamente en la carpeta privada configurada en Apps Script.
+2. Conecta Drive en cada dispositivo. Las tarjetas **GOOGLE DRIVE** aparecen en la biblioteca; abre el mismo libro desde ellas.
+3. Avance y marcadores se guardan primero en el navegador y se envían a Sheets tras una pausa de 1,5 segundos, al volver a Biblioteca, cada 30 segundos y al recuperar conexión. Espera la confirmación de guardado antes de cambiar de dispositivo.
+4. Al abrir un libro se consulta su avance remoto. Si hay cambios locales pendientes y otro dispositivo guardó un avance diferente, se pide elegir cuál continuar. No se sobrescribe silenciosamente.
+
+Los libros se descargan y extraen al abrirlos; se conserva una copia local. Las importaciones directas desde el navegador, las explicaciones de IA y la meta diaria **no se sincronizan con este backend**. Si ya importaste un libro local, añade su EPUB original a Drive y abre su tarjeta de Drive para iniciar su avance compartido; la importación local anterior mantiene su propio avance.
+
+El backend se despliega manualmente en tu cuenta: [apps-script/README.md](apps-script/README.md). Cambiar GitHub no cambia automáticamente Apps Script. “Comprobar conexión” verifica el puente sin contraseña; no autentica ni consulta libros. La sincronización completa del servidor Node sigue siendo otra opción y usa otro contrato; la URL de Apps Script va en su propio campo, no en “Dirección del servidor de IA”.
