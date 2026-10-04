@@ -1,7 +1,8 @@
 import {getAll,get,put,removeBook,saveCache} from './storage.js';
 import {importEpub,textParagraphs} from './epub.js';
 import {demo,demoAnalysis} from './demo.js';
-import {validateAnalysis} from './analysis.js';
+import {validateAnalysis,hasConnections} from './analysis.js?v=connections-20261004';
+import {connectionSample,preparedAnalysisFor} from './connection-examples.js?v=connections-20261004';
 import {preparePronunciation,localFragments} from './pronunciation.js';
 import {connectDriveUI} from './drive-connection.js';
 
@@ -33,7 +34,7 @@ async function loadConfig(){
   $('connection-state').textContent=config?`${enabled?enabled+' disponible':'Servidor conectado; faltan claves de IA.'}${config.requiresLogin&&!token?' Conecta tu sesión con la contraseña.':''}`:'Sin servidor conectado. La lectura y la muestra funcionan sin IA.';
   providerStatus();
 }
-function providerStatus(){const p=config?.providers.find(p=>p.id===preferences.provider);$('provider-status').textContent=book?.demo?'Muestra preparada':p?.enabled?`${preferences.provider==='gemini'?'Gemini':'OpenAI'} · ${p.model}`:'Lectura local · configura IA';}
+function providerStatus(){const p=config?.providers.find(p=>p.id===preferences.provider);$('provider-status').textContent=book?.demo||book?.preparedDemo?'Muestra preparada':p?.enabled?`${preferences.provider==='gemini'?'Gemini':'OpenAI'} · ${p.model}`:'Lectura local · configura IA';}
 async function dailyHabit(){const entries=await getAll('meta');const seconds=entries.filter(x=>x.kind==='stats'&&x.date===dateKey()).reduce((sum,x)=>sum+x.seconds,0);$('habit-value').textContent=`${Math.floor(seconds/60)} / ${preferences.goal} min`;}
 async function renderLibrary(){
   const books=await getAll('books');for(const remote of drive?.books||[])if(!books.some(b=>b.id===remote.id))books.push({...remote,source:'drive',author:'Google Drive',createdAt:0});const states=await getAll('meta');const stateMap=new Map(states.filter(x=>x.kind==='state').map(x=>[x.bookId,x]));
@@ -42,7 +43,7 @@ async function renderLibrary(){
   for(const item of books){
     const saved=stateMap.get(item.id);const at=Math.min(saved?.index||0,(item.paragraphs?.length||1)-1);
     const card=element('article','book-card');const cover=element('div','book-cover');
-    cover.append(element('span','eyebrow',item.source==='drive'?'GOOGLE DRIVE':item.demo?'RELATO DE MUESTRA':'LECTURA PERSONAL'),element('h3','',item.title));
+    cover.append(element('span','eyebrow',item.source==='drive'?'GOOGLE DRIVE':item.demo||item.preparedDemo?'LECTURA DE MUESTRA':'LECTURA PERSONAL'),element('h3','',item.title));
     const del=element('button','quiet book-delete','Eliminar');del.setAttribute('aria-label','Eliminar '+item.title);del.addEventListener('click',safe(async()=>{if(!confirm(`¿Eliminar “${item.title}” y sus ayudas guardadas?`))return;await removeBook(item.id);await put('meta',{id:'deleted:'+item.id,kind:'deleted',bookId:item.id,updatedAt:Date.now()});await renderLibrary();await synchronize();}));
     if(item.source==='drive')del.hidden=true;
     const info=element('div','book-info');info.append(element('p','muted',item.author));const progress=element('p','muted',item.paragraphs?`Ubicación ${at+1} de ${item.paragraphs.length} pasajes${saved?' · avance guardado':''}`:'EPUB privado · se descarga al abrir');
@@ -64,10 +65,10 @@ function cancelRequest(){version++;request?.abort();request=null;$('analyze').di
 async function move(index){if(!book)return;cancelRequest();position=Math.max(0,Math.min(index,book.paragraphs.length-1));await savePosition();await renderPassage();renderBookmarks();lastActivity=Date.now();$('passage').scrollIntoView({block:'start',behavior:'instant'});}
 function cacheId(){return `${book.id}:${position}:${preferences.provider}:${config?.providers.find(p=>p.id===preferences.provider)?.model||'default'}`;}
 async function renderPassage(){
-  const renderVersion=++version;analysis=null;const current=book.paragraphs[position];let cached=book.demo?null:await get('cache',cacheId());
-  if(!book.demo&&!cached&&!config)cached=(await getAll('cache')).filter(item=>item.bookId===book.id&&item.index===position&&item.provider===preferences.provider).sort((a,b)=>b.savedAt-a.savedAt)[0];
+  const renderVersion=++version;hideConnections();analysis=null;selected=0;const current=book.paragraphs[position],prepared=preparedAnalysisFor(current.text);let cached=book.demo||prepared?null:await get('cache',cacheId());
+  if(!book.demo&&!prepared&&!cached&&!config)cached=(await getAll('cache')).filter(item=>item.bookId===book.id&&item.index===position&&item.provider===preferences.provider).sort((a,b)=>b.savedAt-a.savedAt)[0];
   if(renderVersion!==version)return;
-  if(book.demo)analysis=demoAnalysis[position];else if(cached){try{analysis=validateAnalysis(cached.analysis,current.text);}catch{analysis=null;}}
+  if(prepared)analysis=validateAnalysis(prepared,current.text,{requireConnections:true});else if(book.demo)analysis=demoAnalysis[position];else if(cached){try{analysis=validateAnalysis(cached.analysis,current.text);}catch{analysis=null;}}
   const passage=$('passage');passage.replaceChildren();
   const hasAssistance=!!analysis&&preferences.mode==='assisted';
   passage.classList.add('analyzed');
@@ -85,8 +86,8 @@ async function renderPassage(){
   $('location-value').textContent=`Ubicación ${position+1} de ${book.paragraphs.length}`;$('book-progress').value=(position+1)/book.paragraphs.length*100;
   $('page-label').textContent=`${position+1} / ${book.paragraphs.length}`;$('prev').disabled=position===0;$('next').disabled=position===book.paragraphs.length-1;
   $('passage-note').textContent='';
-  $('analysis-status').textContent=book.demo?'Ayuda de muestra · sin consumo de IA':cached?'Explicación guardada · sin nueva solicitud':'';
-  $('analyze').textContent=analysis?'Volver a explicar con IA':'Acompañar este pasaje';$('analyze').disabled=book.demo;
+  $('analysis-status').textContent=prepared?'Conexiones preparadas · sin consumo de IA':book.demo?'Ayuda de muestra · sin consumo de IA':cached?'Explicación guardada · sin nueva solicitud':'';
+  $('analyze').textContent=analysis?'Volver a explicar con IA':'Acompañar este pasaje';$('analyze').disabled=book.demo||!!prepared;
   $('bookmark').textContent=state.bookmarks.includes(position)?'Quitar marcador':'Guardar marcador';
   $('passage-meaning-box').hidden=!analysis;$('passage-meaning-box').open=false;$('passage-meaning').textContent=analysis?.meaning||'';
   if(analysis)selectFragment(0);else clearHelp();
@@ -96,8 +97,10 @@ function renderChunks(fragments,assisted){
   fragments.forEach((fragment,i)=>{
     const button=element('button','chunk');button.type='button';
     button.append(element('span','chunk-en',fragment.en),element('span','chunk-phonetic',assisted?fragment.phonetic:fragment.text));button.lastChild.lang='es';
-    button.setAttribute('aria-label',fragment.en+' · ver ayuda');
+    button.setAttribute('aria-label',fragment.en+(assisted&&hasConnections(analysis)?' · ver cómo se conecta':' · ver ayuda'));
+    if(assisted&&hasConnections(analysis)){button.setAttribute('aria-controls','connection-help');button.setAttribute('aria-expanded','false');}
     button.addEventListener('click',()=>{
+      if(assisted&&hasConnections(analysis)){showConnections(i);return;}
       if(assisted)selectFragment(i);else{
         clearHelp();$('selected-fragment').textContent=fragment.en;$('selected-phonetic').textContent=fragment.text;
         const details=['Guía local aproximada · sin IA.'];
@@ -115,16 +118,36 @@ function selectFragment(index){
   $('selected-fragment').textContent=fragment.en;$('selected-phonetic').textContent=fragment.phonetic;$('fragment-hint').textContent=fragment.hint;$('fragment-meaning').textContent=fragment.es;$('fragment-note').textContent=fragment.note;
   ['fragment-hint','fragment-meaning','fragment-note'].forEach(id=>$(id).hidden=true);$('hint-button').disabled=false;$('meaning-button').disabled=false;
 }
+function hideConnections(returnFocus=false){
+  const source=$('passage').querySelectorAll('.chunk')[selected];
+  $('connection-help').hidden=true;
+  $('passage').querySelectorAll('.chunk').forEach(button=>{button.classList.remove('is-selected','is-connected');button.setAttribute('aria-pressed','false');if(button.hasAttribute('aria-controls'))button.setAttribute('aria-expanded','false');button.removeAttribute('aria-describedby');});
+  if(returnFocus)source?.focus({preventScroll:true});
+}
+function showConnections(index){
+  if(!hasConnections(analysis)||preferences.mode!=='assisted'||!Number.isInteger(index)||index<0||index>=analysis.fragments.length)return;
+  selectFragment(index);if($('help-dialog').open)$('help-dialog').close();
+  const fragment=analysis.fragments[index],target=analysis.fragments[fragment.connectsTo];
+  $('connection-adds').textContent=fragment.adds;$('connection-fragment').textContent=fragment.en;
+  $('connection-target-line').hidden=!target;$('connection-target').textContent=target?.en||'';
+  $('connection-copy').textContent=fragment.connection;$('connection-meaning').textContent=fragment.es;
+  $('connection-scene').textContent=analysis.scene;
+  $('connection-meaning-box').open=false;$('connection-scene-box').open=false;
+  $('connection-prev').disabled=index===0;$('connection-next').disabled=index===analysis.fragments.length-1;
+  $('connection-count').textContent=`${index+1} / ${analysis.fragments.length}`;
+  $('connection-help').hidden=false;
+  $('passage').querySelectorAll('.chunk').forEach((button,i)=>{button.classList.toggle('is-selected',i===index);button.classList.toggle('is-connected',i===fragment.connectsTo);button.setAttribute('aria-expanded',String(i===index));button.removeAttribute('aria-describedby');if(i===index)button.setAttribute('aria-describedby','connection-copy');});
+}
 async function analyzePassage(){
-  if(!book||book.demo)return;
+  if(!book||book.demo||preparedAnalysisFor(book.paragraphs[position].text))return;
   if(!config?.providers.find(p=>p.id===preferences.provider)?.enabled){openSettings();notify('Conecta y configura tu proveedor de IA.');return;}
   if(config.requiresLogin&&!token){openSettings();notify('Conecta tu sesión con la contraseña del servidor.');return;}
   if(analysis&&!confirm('Este pasaje ya tiene ayuda guardada. ¿Hacer una nueva solicitud de IA?'))return;
-  cancelRequest();const expectedVersion=version;const bookId=book.id,index=position;const cache=cacheId();request=new AbortController();$('analyze').disabled=true;$('analysis-status').textContent='Preparando los fragmentos y su pronunciación…';
+  cancelRequest();const expectedVersion=version;const bookId=book.id,index=position;const cache=cacheId();request=new AbortController();$('analyze').disabled=true;$('analysis-status').textContent='Preparando los fragmentos y sus conexiones…';
   try{
     const original=book.paragraphs[index].text;const result=await api('/api/analyze',{method:'POST',body:JSON.stringify({provider:preferences.provider,text:original,context:book.paragraphs[index-1]?.text.slice(-2500)||''}),signal:request.signal});
     const validated=validateAnalysis(result.analysis,original);await saveCache({id:cache,bookId,index,analysis:validated,provider:result.provider,model:result.model,savedAt:Date.now()});
-    if(expectedVersion===version&&book?.id===bookId&&position===index){preferences.mode='assisted';savePreferences();await renderPassage();}
+    if(expectedVersion===version&&book?.id===bookId&&position===index){preferences.mode='assisted';savePreferences();await renderPassage();if(hasConnections(analysis))showConnections(0);}
   }catch(error){if(error.name!=='AbortError'){if(expectedVersion===version)$('analysis-status').textContent='La lectura sigue disponible. Puedes volver a intentar.';notify(error.message);}}
   finally{if(book?.id===bookId&&position===index){$('analyze').disabled=false;}request=null;}
 }
@@ -193,7 +216,7 @@ async function configure(event){
 }
 async function exportCopy(){const data=await snapshot();const blob=new Blob([JSON.stringify(data)],{type:'application/json'});const url=URL.createObjectURL(blob);const link=element('a');link.href=url;link.download='entre-lineas-'+dateKey()+'.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 async function restoreCopy(file){if(!file)return;if(file.size>30*1024*1024)throw new Error('La copia supera 30 MB.');const data=checkSnapshot(JSON.parse(await file.text()));if(!confirm('¿Añadir los libros de esta copia y recuperar sus avances más recientes?'))return;await mergeSnapshot(data);await renderLibrary();await synchronize();notify('Lecturas recuperadas.');}
-async function showLibrary(){drive?.flush();cancelRequest();book=null;$('reader-view').hidden=true;document.body.classList.remove('reading');$('library-view').hidden=false;await synchronize();await renderLibrary();}
+async function showLibrary(){drive?.flush();cancelRequest();hideConnections();book=null;$('reader-view').hidden=true;document.body.classList.remove('reading');$('library-view').hidden=false;await synchronize();await renderLibrary();}
 async function migrateLegacy(){
   const original=localStorage.getItem('saved_text');const id='legacy-reading-v1';
   if(!original||await get('books',id)||await get('meta','deleted:'+id))return;
@@ -214,6 +237,7 @@ async function init(){
   document.querySelectorAll('[data-close]').forEach(button=>button.addEventListener('click',()=>$(button.dataset.close).close()));
   $('theme').addEventListener('click',()=>{preferences.theme=preferences.theme==='dark'?'light':'dark';savePreferences();});
   $('demo-button').addEventListener('click',safe(async()=>{let id=demo.id;if(await get('meta','deleted:'+id))id=crypto.randomUUID();if(!await get('books',id)){await put('books',{...demo,id,createdAt:Date.now()});}await openBook(id);}));
+  $('connections-demo').addEventListener('click',safe(async()=>{let id=connectionSample.id;if(await get('meta','deleted:'+id))id=crypto.randomUUID();if(!await get('books',id))await put('books',{...connectionSample,id,createdAt:Date.now()});preferences.mode='assisted';savePreferences();await openBook(id);await move(0);showConnections(3);}));
   $('epub-file').addEventListener('change',safe(event=>readUploaded(event.target.files[0])));
   $('import-form').addEventListener('submit',safe(async event=>{event.preventDefault();const text=$('text-input').value;if(text.length>20*1024*1024)throw new Error('El texto supera 20 MB.');const paragraphs=textParagraphs(text);if(!paragraphs.length)throw new Error('Pega un texto en inglés para empezar.');await addBook({title:$('text-title').value.trim()||'Mi lectura',author:'Texto personal',paragraphs,chapters:[{title:'Lectura',start:0}]});$('text-input').value='';$('text-title').value='';}));
   $('prev').addEventListener('click',safe(()=>move(position-1)));$('next').addEventListener('click',safe(()=>move(position+1)));
@@ -224,12 +248,15 @@ async function init(){
   $('font-size').addEventListener('input',event=>{preferences.fontSize=Number(event.target.value);savePreferences();});
   $('bookmark').addEventListener('click',safe(async()=>{if(state.bookmarks.includes(position))state.bookmarks=state.bookmarks.filter(i=>i!==position);else state.bookmarks.push(position);await savePosition();renderBookmarks();$('bookmark').textContent=state.bookmarks.includes(position)?'Quitar marcador':'Guardar marcador';}));
   $('reader-options').addEventListener('click',()=>$('reader-options-dialog').showModal());
-  $('reader-help').addEventListener('click',()=>$('help-dialog').showModal());
+  $('reader-help').addEventListener('click',()=>{if(hasConnections(analysis)&&preferences.mode==='assisted')showConnections(selected);else $('help-dialog').showModal();});
+  $('connection-close').addEventListener('click',()=>hideConnections(true));
+  $('connection-prev').addEventListener('click',()=>showConnections(selected-1));
+  $('connection-next').addEventListener('click',()=>showConnections(selected+1));
   $('analyze').addEventListener('click',safe(analyzePassage));
   $('hint-button').addEventListener('click',()=>$('fragment-hint').hidden=!$('fragment-hint').hidden);
   $('meaning-button').addEventListener('click',()=>{const hidden=!$('fragment-meaning').hidden;$('fragment-meaning').hidden=hidden;$('fragment-note').hidden=hidden;});
   $('settings-form').addEventListener('submit',safe(configure));$('export').addEventListener('click',safe(exportCopy));$('restore').addEventListener('change',safe(async event=>{try{await restoreCopy(event.target.files[0]);}finally{event.target.value='';}}));
-  document.addEventListener('keydown',safe(async event=>{if(!book||document.querySelector('dialog[open]')||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName))return;if(event.key==='ArrowRight'){event.preventDefault();await move(position+1);}if(event.key==='ArrowLeft'){event.preventDefault();await move(position-1);}}));
+  document.addEventListener('keydown',safe(async event=>{if(!book||document.querySelector('dialog[open]')||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName))return;if(event.key==='Escape'&&!$('connection-help').hidden){hideConnections(true);return;}if(event.key==='ArrowRight'){event.preventDefault();await move(position+1);}if(event.key==='ArrowLeft'){event.preventDefault();await move(position-1);}}));
   ['pointerdown','keydown','scroll'].forEach(type=>document.addEventListener(type,()=>{lastActivity=Date.now();},{passive:true}));
   setInterval(safe(async()=>{if(book&&!document.hidden&&Date.now()-lastActivity<90000){const id=`stats:${device}:${dateKey()}`;const entry=await get('meta',id)||{id,kind:'stats',date:dateKey(),device,seconds:0};entry.seconds=Math.min(86400,entry.seconds+15);await put('meta',entry);}await dailyHabit();}),15000);
   setInterval(()=>{if(!document.hidden)synchronize();},30000);

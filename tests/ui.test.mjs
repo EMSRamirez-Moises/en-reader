@@ -13,7 +13,9 @@ test('interfaz: muestra, pronunciación, marcadores, progreso, texto y explicaci
   globalThis.fetch=async(url,options={})=>{
     if(url.includes('/pronunciation/'))return {ok:true,json:async()=>JSON.parse(await readFile(new URL('../public/pronunciation/'+url.split('/').pop(),import.meta.url),'utf8'))};
     if(url.endsWith('/api/config'))return {ok:true,json:async()=>({providers:[{id:'gemini',enabled:true,model:'test-model'},{id:'openai',enabled:false,model:'test-model'}],requiresLogin:false,syncEnabled:false})};
-    if(url.endsWith('/api/analyze')){calls++;const input=JSON.parse(options.body);return {ok:true,json:async()=>({provider:'gemini',model:'test-model',analysis:{meaning:'Ella abrió la puerta. Luego sonrió.',fragments:input.text.match(/[^.!?]+[.!?]*/g).map(en=>({en:en.trim(),phonetic:'pronunciación de prueba',es:'Significado de prueba',hint:'Pista de prueba',note:''}))}})};}
+    if(url.endsWith('/api/analyze')){calls++;const input=JSON.parse(options.body);const analysis={meaning:'Sentido de prueba.',fragments:input.text.match(/[^.!?]+[.!?]*/g).map(en=>({en:en.trim(),phonetic:'pronunciación de prueba',es:'Significado de prueba',hint:'Pista de prueba',note:''}))};
+      if(calls>1){analysis.scene='La misma persona realizó las dos acciones.';analysis.fragments.forEach((f,i)=>Object.assign(f,{connectsTo:i===0?-1:i-1,adds:i===0?'La primera acción':'La acción siguiente',connection:i===0?'Presenta la primera acción.':'La misma persona hizo esto después de la acción anterior.'}));}
+      return {ok:true,json:async()=>({provider:'gemini',model:'test-model',analysis})};}
     throw new Error('Unexpected URL '+url);
   };
   const nativeInterval=globalThis.setInterval;const handles=[];globalThis.setInterval=(...args)=>{const handle=nativeInterval(...args);handles.push(handle);return handle;};
@@ -51,5 +53,27 @@ test('interfaz: muestra, pronunciación, marcadores, progreso, texto y explicaci
     $('next').click();await until(()=>$('page-label').textContent==='2 / 2');$('bookmark').click();await until(()=>$('bookmark-count').textContent==='(1)');$('back-library').click();await until(()=>remote?.index===1&&remote?.bookmarks.includes(1));
     assert.ok(sessionStorage.getItem('reader-drive-session').includes('fake-token'));assert.ok(!localStorage.getItem('reader-preferences').includes('only-a-test-password'));
     $('drive-disconnect').click();await until(()=>!window.document.querySelector('iframe'));assert.equal(sessionStorage.getItem('reader-drive-session'),null);
+    $('connections-demo').click();await until(()=>$('passage').querySelectorAll('.chunk').length===5&&!$('connection-help').hidden);
+    assert.equal(calls,1,'La muestra de conexiones no consume IA');assert.equal($('help-dialog').open,false);
+    const chunks=[...$('passage').querySelectorAll('.chunk')];
+    assert.equal(chunks.map(b=>b.querySelector('.chunk-en').textContent).join(' '),'True, a schoolteacher had come from somewhere and lived at the rancho for three years for her health.');
+    assert.equal($('connection-fragment').textContent,'for three years');assert.equal($('connection-adds').textContent,'Duración de la estancia');assert.equal($('connection-target').textContent,'and lived at the rancho');
+    assert.ok(chunks[3].classList.contains('is-selected'));assert.ok(chunks[2].classList.contains('is-connected'));assert.equal(chunks[3].getAttribute('aria-expanded'),'true');
+    assert.equal($('connection-scene-box').open,false);assert.equal($('connection-meaning-box').open,false);
+    chunks[4].click();assert.equal($('connection-adds').textContent,'Motivo de la estancia');assert.equal($('connection-target').textContent,'and lived at the rancho');assert.match($('connection-copy').textContent,/motivo.*salud/);
+    $('connection-prev').click();assert.equal($('connection-fragment').textContent,'for three years');
+    $('connection-close').click();assert.equal($('connection-help').hidden,true);assert.ok(!$('passage').querySelector('.is-selected,.is-connected'));assert.equal(window.document.activeElement,chunks[3]);
+    $('reader-help').click();assert.equal($('connection-help').hidden,false);assert.equal($('help-dialog').open,false);
+    $('next').click();await until(()=>$('page-label').textContent==='2 / 2');assert.equal($('connection-help').hidden,true);
+    $('passage').querySelectorAll('.chunk')[1].click();assert.equal($('connection-fragment').textContent,'when he showed up.');assert.equal($('connection-target').textContent,'She was about to leave');assert.match($('connection-scene').textContent,/no dice si ella terminó/);
+    $('reader-options').click();$('reading-mode').value='continuous';$('reading-mode').dispatchEvent(new window.Event('change'));await until(()=>$('connection-help').hidden);$('reader-options-dialog').close();
+    $('reader-help').click();assert.equal($('help-dialog').open,true,'Lectura continua conserva su ayuda anterior');$('help-dialog').close();
+    $('back-library').click();await until(()=>!$('library-view').hidden);$('import-button').click();$('text-title').value='La frase del libro';$('text-input').value='True, a schoolteacher had come from somewhere and lived at the rancho for three years for her health.';$('import-form').dispatchEvent(new window.Event('submit',{cancelable:true}));
+    await until(()=>$('book-title').textContent==='La frase del libro');$('reader-options').click();$('reading-mode').value='assisted';$('reading-mode').dispatchEvent(new window.Event('change'));await until(()=>$('passage').querySelectorAll('.chunk').length===5);$('reader-options-dialog').close();
+    $('passage').querySelectorAll('.chunk')[3].click();assert.equal($('connection-adds').textContent,'Duración de la estancia');assert.equal(calls,1,'El mismo texto importado reutiliza la explicación preparada');
+    $('back-library').click();await until(()=>!$('library-view').hidden);$('import-button').click();$('text-title').value='Una lectura nueva';$('text-input').value='He put down the book. Then he left.';$('import-form').dispatchEvent(new window.Event('submit',{cancelable:true}));await until(()=>$('book-title').textContent==='Una lectura nueva');
+    assert.equal($('connection-help').hidden,true);$('reader-help').click();$('analyze').click();await until(()=>!$('connection-help').hidden);assert.equal(calls,2);assert.equal($('help-dialog').open,false);
+    $('passage').querySelectorAll('.chunk')[1].click();assert.equal($('connection-target').textContent,'He put down the book.');assert.equal($('connection-adds').textContent,'La acción siguiente');
+    $('back-library').click();await until(()=>!$('library-view').hidden);[...$('book-list').children].find(c=>c.textContent.includes('Una lectura nueva')).querySelector('.book-info button').click();await until(()=>$('book-title').textContent==='Una lectura nueva'&&$('passage').querySelectorAll('.chunk').length===2);assert.equal(calls,2,'La nueva explicación con conexiones también se reutiliza');
   }finally{handles.forEach(clearInterval);timeouts.forEach(clearTimeout);globalThis.setTimeout=nativeTimeout;globalThis.setInterval=nativeInterval;globalThis.fetch=originalFetch;await window.happyDOM.abort();for(const [name,value] of old)Object.defineProperty(globalThis,name,{value,writable:true,configurable:true});}
 });

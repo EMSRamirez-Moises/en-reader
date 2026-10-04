@@ -4,8 +4,8 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Disfruta libros en inglés con ayuda por fragmentos, pronunciación discreta y progreso de lectura.">
   <meta name="color-scheme" content="light dark"><title>Entre líneas · Leer en inglés</title>
-  <link rel="icon" href="./icon.svg" type="image/svg+xml"><link rel="stylesheet" href="./app.css?v=drive-20261004">
-  <script src="./vendor/jszip.min.js" defer></script><script src="./js/app.js?v=drive-20261004" type="module"></script>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml"><link rel="stylesheet" href="./app.css?v=connections-20261004">
+  <script src="./vendor/jszip.min.js" defer></script><script src="./js/app.js?v=connections-20261004" type="module"></script>
 </head>
 <body>
   <header class="app-header">
@@ -15,8 +15,8 @@
   <main>
     <section id="library-view" class="library-view">
       <div class="intro-grid">
-        <div><span class="eyebrow">TU ESPACIO DE LECTURA</span><h1>Una buena historia.<br>Un poco más cerca.</h1><p class="intro-copy">Lee libros en inglés a tu ritmo. Cuando un pasaje se complique, comprende sus fragmentos y sigue la historia.</p><div class="flex flex-wrap gap-3"><button id="import-button" class="primary">Añadir un libro</button><button id="demo-button" class="secondary">Probar una lectura</button></div></div>
-        <aside class="sample-card"><span class="eyebrow">LECTURA ACOMPAÑADA</span><p class="sample-en" lang="en">There was a sound of music.</p><p class="sample-phonetic">der uaz a sáund ov miúzik</p><div class="sample-rule"></div><p class="sample-es">Se escuchaba música.</p><span class="muted text-sm">Un fragmento. Una idea completa.</span></aside>
+        <div><span class="eyebrow">TU ESPACIO DE LECTURA</span><h1>Una buena historia.<br>Un poco más cerca.</h1><p class="intro-copy">Lee libros en inglés a tu ritmo. Cuando un pasaje se complique, descubre cómo se unen sus ideas y sigue la historia.</p><div class="flex flex-wrap gap-3"><button id="import-button" class="primary">Añadir un libro</button><button id="connections-demo" class="secondary">Probar las conexiones</button><button id="demo-button" class="quiet">Probar una lectura</button></div></div>
+        <aside class="sample-card"><span class="eyebrow">LECTURA ACOMPAÑADA</span><p class="sample-en" lang="en">lived at the rancho<br>for three years</p><p class="sample-phonetic">livd at da ránchou · fer zrí yírs</p><div class="sample-rule"></div><p class="sample-es">«For three years» dice cuánto duró la estancia.</p><span class="muted text-sm">Dos grupos. Una misma idea.</span></aside>
       </div>
       <div class="library-heading"><div><span class="eyebrow">CONTINÚA DONDE TE QUEDASTE</span><h2>Tu biblioteca</h2></div><div class="habit"><span id="habit-value">0 / 10 min</span><span class="muted text-sm">Tu lectura de hoy</span></div></div>
       <button id="drive-refresh" class="quiet" hidden>Actualizar libros de Drive</button><div id="book-list" class="book-grid"></div>
@@ -33,6 +33,13 @@
           <div id="passage-note" class="muted text-sm"></div>
           <button id="next-context" class="context-paragraph" lang="en" hidden></button>
         </article>
+        <aside id="connection-help" class="connection-help" aria-label="Cómo se conecta el fragmento" hidden>
+          <div class="connection-heading"><p id="connection-adds" class="connection-adds"></p><button id="connection-close" class="quiet">Volver al libro</button></div>
+          <div aria-live="polite"><p id="connection-fragment" class="connection-fragment" lang="en"></p><p id="connection-target-line" class="connection-target-line">Se conecta con <span id="connection-target" lang="en"></span></p><p id="connection-copy" class="connection-copy"></p></div>
+          <details id="connection-meaning-box"><summary>Ver significado de este fragmento</summary><p id="connection-meaning"></p></details>
+          <details id="connection-scene-box"><summary>Reconstruir la escena completa</summary><p id="connection-scene"></p></details>
+          <nav class="connection-controls" aria-label="Recorrer los fragmentos"><button id="connection-prev" class="quiet">← Fragmento anterior</button><span id="connection-count" class="muted text-sm"></span><button id="connection-next" class="quiet">Siguiente fragmento →</button></nav>
+        </aside>
         <nav class="page-controls" aria-label="Navegar por la lectura"><button id="prev" class="secondary" aria-keyshortcuts="ArrowLeft">← Anterior</button><span id="page-label" class="muted text-sm"></span><button id="next" class="secondary" aria-keyshortcuts="ArrowRight">Siguiente →</button><button id="reader-help" class="quiet" aria-label="Abrir ayuda del pasaje">Ayuda</button></nav>
       </div>
       <dialog id="help-dialog"><div class="dialog-heading"><h2>Ayuda del pasaje</h2><button data-close="help-dialog" class="quiet" aria-label="Cerrar ayuda">✕</button></div><span id="provider-status" class="status-pill">Lectura local</span>

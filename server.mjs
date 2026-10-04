@@ -59,7 +59,7 @@ export async function analyze(provider,text,context,fetchImpl=fetch) {
     throw new HttpError(response.status===429?429:502,messages[response.status] || 'El proveedor no pudo procesar el pasaje. Revisa la configuración de IA.');
   }
   const raw=provider==='gemini'?data.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join(''):data.output?.flatMap(item=>item.content||[]).filter(item=>item.type==='output_text').map(item=>item.text).join('');
-  try{return {analysis:validateAnalysis(JSON.parse(raw),text),provider,model:models[provider]};}catch(error){throw new HttpError(502,error.message.includes('IA')?error.message:'La IA no terminó la explicación. Intenta con un pasaje más corto.');}
+  try{return {analysis:validateAnalysis(JSON.parse(raw),text,{requireConnections:true}),provider,model:models[provider]};}catch(error){throw new HttpError(502,error.message.includes('IA')?error.message:'La IA no terminó la explicación. Intenta con un pasaje más corto.');}
 }
 export function createServer(){return http.createServer(async(req,res)=>{
   res.setHeader('X-Content-Type-Options','nosniff');
